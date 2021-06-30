@@ -1,0 +1,29 @@
+Chaining together parsing and validation:
+
+Can write functions for this pretty easily and get something like:
+
+> version: validate(read_bit_field(&mut buf, "version field"), validate_version)?
+
+But if the field fails at the validation step, I won't have the field name.  If we
+'validation' is special enough that it deserves some special treatment, we could write
+extra versions of all the read functions to take in a validation function, like:
+
+> version: read_validated_bit_field(& mut buf, "version field", validate_version)
+
+One downside of this is that we'd need to write a validated version of _all_ the field
+reading functions.
+
+Other options:
+1. Pass the field name to both functions (bleh)
+1. Somehow encode the field name in a successful PacketParseResult (would this be possible in a
+   way that wouldn't make it too annoying to get at the underlying value?)
+1. Pass the field name once, and somehow curry it to each of the underlying functions?  I think
+   this would still require writing extra functions
+
+The currying option is interesting: maybe none of the read_xxx functions should take the field name, but
+instead have that be handled by some higher layer which inserted the field name into the error message?
+--> I basically already have this layer of abstraction: those are the bitbuffer methods.
+
+at this point the best I can think of is the extra methods for validation.  at least they can re-use the
+original read methods to do the actual read
+
