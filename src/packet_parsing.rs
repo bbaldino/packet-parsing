@@ -44,25 +44,6 @@ fn read_and_validate_bit_field<F: FnOnce(&Bit) -> ValidationResult> (buf: &mut d
     }
 }
 
-// The bummer here is that I don't have access to the field's name: I'd have to either pass it
-// twice (once to the parse func, and again to the validate func) or have some 'ParsedField' struct
-// which stored the field name and the value.  Or, maybe this could be wrapped with another
-// function that would take the field_name in and pass it to the other functions?
-//fn validate<T, F: FnOnce() -> PacketParseResult<T>, G: FnOnce(&T) -> ValidationResult> (read_func: F, validate_func: G) -> PacketParseResult<T> {
-//    let result = read_func()?;
-//    match validate_func(&result) {
-//        Ok(_) => Ok(result),
-//        Err(e) => Err(PacketParseError::ValidationError(e))
-//    }
-//}
-//
-//fn validate2<T, F: FnOnce(&T) -> ValidationResult>(value: T, validator: F) -> PacketParseResult<T> {
-//    match validator(&value) {
-//        Ok(_) => Ok(value),
-//        Err(e) => Err(PacketParseError::ValidationError(e))
-//    }
-//}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,14 +70,6 @@ mod tests {
         };
         let data: Vec<u8> = vec![0b0];
         let mut buf = BitBuffer::new(data);
-
-        //if let Err(e) = validate(|| read_bit_field(&mut buf, "my bit"), validate_bit) {
-        //    println!("Error parsing: {}", e);
-        //}
-
-        //if let Err(e) = validate2(read_bit_field(&mut buf, "my bit").unwrap(), validate_bit) {
-        //    println!("Error parsing: {}", e);
-        //}
 
         if let Err(e) = read_and_validate_bit_field(&mut buf, "my bit", validate_bit) {
             println!("Error parsing: {}", e);
