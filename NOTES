@@ -27,3 +27,8 @@ instead have that be handled by some higher layer which inserted the field name 
 at this point the best I can think of is the extra methods for validation.  at least they can re-use the
 original read methods to do the actual read
 
+
+I'm running into this again and really wanting to be able to write functional-style methods that can
+be chained together and wishing I had access to the field name in a PacketParseResult.  I'm thinking
+now about writing a custom Result-style type that will also keep the field name.
+
