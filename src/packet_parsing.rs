@@ -89,6 +89,65 @@ pub fn read_u16_field_and_validate<F: FnOnce(u16) -> ValidationResult>(
     }
 }
 
+pub fn read_u24_field(buf: &mut dyn ReadableBuf, field_name: &str) -> PacketParseResult<u32> {
+    buf.read_u24().to_ppr(field_name)
+}
+
+pub fn read_u24_field_and_validate<F: FnOnce(u32) -> ValidationResult>(
+    buf: &mut dyn ReadableBuf,
+    field_name: &str,
+    validator: F,
+) -> PacketParseResult<u32> {
+    let value = read_u24_field(buf, field_name)?;
+    match validator(value) {
+        Ok(_) => Ok(value),
+        Err(e) => Err(e.into_ppe(field_name)),
+    }
+}
+
+pub fn read_u32_field(buf: &mut dyn ReadableBuf, field_name: &str) -> PacketParseResult<u32> {
+    buf.read_u32().to_ppr(field_name)
+}
+
+pub fn read_u32_field_and_validate<F: FnOnce(u32) -> ValidationResult>(
+    buf: &mut dyn ReadableBuf,
+    field_name: &str,
+    validator: F,
+) -> PacketParseResult<u32> {
+    let value = read_u32_field(buf, field_name)?;
+    match validator(value) {
+        Ok(_) => Ok(value),
+        Err(e) => Err(e.into_ppe(field_name)),
+    }
+}
+
+pub fn read_bytes_field<'a, 'b>(
+    buf: &'a mut dyn ReadableBuf,
+    num_bytes: usize,
+    field_name: &str,
+) -> PacketParseResult<&'b [u8]>
+where
+    'a: 'b,
+{
+    buf.read_bytes(num_bytes).to_ppr(field_name)
+}
+
+pub fn read_bytes_field_and_validate<'a, 'b, F: FnOnce(&[u8]) -> ValidationResult>(
+    buf: &'a mut dyn ReadableBuf,
+    num_bytes: usize,
+    field_name: &str,
+    validator: F,
+) -> PacketParseResult<&'b [u8]>
+where
+    'a: 'b,
+{
+    let value = read_bytes_field(buf, num_bytes, field_name)?;
+    match validator(value) {
+        Ok(_) => Ok(value),
+        Err(e) => Err(e.into_ppe(field_name)),
+    }
+}
+
 pub fn try_parse_field_group<T, F: FnOnce() -> PacketParseResult<T>>(
     field_group_name: &str,
     block: F,
@@ -110,14 +169,21 @@ mod tests {
 
     #[test]
     fn test_read_bit_field() {
-        //let data: Vec<u8> = vec![0xDE, 0xAD];
-        let data = Vec::<u8>::new();
+        let mut buf = BitBuffer::new(vec![0b11000000]);
 
-        let mut buf = BitBuffer::new(data);
+        let res = read_bit_field(&mut buf, "my field");
+        assert!(res.is_ok());
+        assert_eq!(Bit::One, res.unwrap());
+    }
 
-        if let Err(e) = read_bit_field(&mut buf, "my field") {
-            println!("Error parsing: {}", e);
-        }
+    #[test]
+    fn test_read_bit_failure() {
+        let mut buf = BitBuffer::new(Vec::new());
+
+        let res = read_bit_field(&mut buf, "my field");
+        assert!(res.is_err());
+        let r = res.unwrap_err();
+        assert!(matches!(r, PacketParseError::BufferError { .. }));
     }
 
     #[test]
