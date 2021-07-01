@@ -1,3 +1,5 @@
+pub mod error;
+pub mod field_buffer;
 pub mod packet_parsing;
 
 #[cfg(test)]
