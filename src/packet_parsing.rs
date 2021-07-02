@@ -1,35 +1,31 @@
-use std::fmt::Formatter;
-
-use crate::error::{OperationResult, PacketParseError, PacketParseResult, ValidationResult};
-use bitbuffer::bit::Bit;
-use bitbuffer::readable_buf::ReadableBuf;
+use crate::error::{wrap, ValidationError, ValidationResult};
 
 fn try_parse_field<T, U, F: FnOnce() -> Result<T, U>>(
     field_name: &str,
     block: F,
-) -> PacketParseResult<T>
+) -> Result<T, Box<dyn std::error::Error>>
 where
-    U: Into<Box<dyn std::error::Error>>,
+    U: std::error::Error + 'static,
 {
     match block() {
         Ok(v) => Ok(v),
-        Err(e) => Err(PacketParseError::FieldParseError {
-            field_name: field_name.to_owned(),
-            error: e.into(),
-        }),
+        Err(e) => Err(wrap(field_name, e)),
     }
 }
 
 trait Validatable<T> {
-    fn validate<F: FnOnce(T) -> ValidationResult>(self, validator: F) -> OperationResult<T>;
+    fn validate<U: std::error::Error + 'static, F: FnOnce(&T) -> ValidationResult<T>>(
+        self,
+        validator: F,
+    ) -> Result<T, Box<dyn std::error::Error>>;
 }
 
-impl<T> Validatable<T> for T
-where
-    T: Copy,
-{
-    fn validate<F: FnOnce(T) -> ValidationResult>(self, validator: F) -> OperationResult<T> {
-        match validator(self) {
+impl<T> Validatable<T> for T {
+    fn validate<U: std::error::Error + 'static, F: FnOnce(&T) -> ValidationResult<T>>(
+        self,
+        validator: F,
+    ) -> Result<T, Box<dyn std::error::Error>> {
+        match validator(&self) {
             Ok(_) => Ok(self),
             Err(e) => Err(e.into()),
         }
@@ -208,49 +204,16 @@ where
 //    }
 //}
 
-#[derive(Debug)]
-struct Foo;
-
-impl std::fmt::Display for Foo {
-    fn fmt(&self, _: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        todo!()
-    }
-}
-
-impl std::error::Error for Foo {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        todo!()
-    }
-}
-
-// works fine
-fn foo(buf: &mut dyn ReadableBuf) -> Result<u8, Box<dyn std::error::Error>> {
-    let x = buf.read_u8()?;
-    Ok(x)
-}
-
-fn bar(buf: &mut dyn ReadableBuf) -> OperationResult<u8> {
-    Ok(buf.read_u8()?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::ValidationError;
-    use bitbuffer::bit_buffer::BitBuffer;
+    use bitbuffer::{bit_buffer::BitBuffer, readable_buf::ReadableBuf};
 
-    fn validate_field(value: u16) -> ValidationResult {
+    fn validate_field(value: u16) -> ValidationResult<u16> {
         println!("validating value {}", value);
         match value {
-            0..=5 => Ok(()),
+            0..=5 => Ok(value),
             v @ _ => Err(ValidationError(format!(
                 "Expected value between 0 and 5, got {}",
                 v
@@ -258,16 +221,16 @@ mod tests {
         }
     }
 
-    fn validate_version(value: u8) -> ValidationResult {
+    fn validate_version(value: u8) -> ValidationResult<u8> {
         match value {
-            2 => Ok(()),
+            2 => Ok(value),
             v @ _ => Err(ValidationError(format!("Expected version=2, got {}", v))),
         }
     }
 
-    fn validate_packet_type(value: u8) -> ValidationResult {
+    fn validate_packet_type(value: u8) -> ValidationResult<u8> {
         match value {
-            90..=120 => Ok(()),
+            90..=120 => Ok(value),
             v @ _ => Err(ValidationError(format!(
                 "Expected packet type between 90 and 120, got {}",
                 v
@@ -282,17 +245,23 @@ mod tests {
         packet_type: u8,
     }
 
-    fn parse_header(buf: &mut dyn ReadableBuf) -> PacketParseResult<Header> {
-        try_parse_field::<_, PacketParseError, _>("header", || {
+    fn parse_header(buf: &mut dyn ReadableBuf) -> Result<Header, Box<dyn std::error::Error>> {
+        let x: Result<u8, Box<dyn std::error::Error + 'static>> =
+            try_parse_field("version", || buf.read_bits_as_u8(2));
+        try_parse_field("header", || {
             Ok(Header {
-                version: try_parse_field("version", || {
-                    buf.read_bits_as_u8(2)?.validate(validate_version)
-                })?,
-                has_padding: try_parse_field("has_padding", || buf.read_bit_as_bool())?,
-                report_count: try_parse_field("report count", || buf.read_bits_as_u8(5))?,
-                packet_type: try_parse_field("packet type", || {
-                    buf.read_u8()?.validate(validate_packet_type)
-                })?,
+                //version: try_parse_field("version", || {
+                //    buf.read_bits_as_u8(2)?.validate(validate_version)
+                //})?,
+                version: x?,
+                //has_padding: try_parse_field("has_padding", || buf.read_bit_as_bool())?,
+                has_padding: true,
+                //report_count: try_parse_field("report count", || buf.read_bits_as_u8(5))?,
+                report_count: 10,
+                //packet_type: try_parse_field("packet type", || {
+                //    buf.read_u8()?.validate(validate_packet_type)
+                //})?,
+                packet_type: 10,
             })
         })
     }
