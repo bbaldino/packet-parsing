@@ -283,15 +283,17 @@ mod tests {
     }
 
     fn parse_header(buf: &mut dyn ReadableBuf) -> PacketParseResult<Header> {
-        Ok(Header {
-            version: try_parse_field("version", || {
-                buf.read_bits_as_u8(2)?.validate(validate_version)
-            })?,
-            has_padding: try_parse_field("has_padding", || buf.read_bit_as_bool())?,
-            report_count: try_parse_field("report count", || buf.read_bits_as_u8(5))?,
-            packet_type: try_parse_field("packet type", || {
-                buf.read_u8()?.validate(validate_packet_type)
-            })?,
+        try_parse_field::<_, PacketParseError, _>("header", || {
+            Ok(Header {
+                version: try_parse_field("version", || {
+                    buf.read_bits_as_u8(2)?.validate(validate_version)
+                })?,
+                has_padding: try_parse_field("has_padding", || buf.read_bit_as_bool())?,
+                report_count: try_parse_field("report count", || buf.read_bits_as_u8(5))?,
+                packet_type: try_parse_field("packet type", || {
+                    buf.read_u8()?.validate(validate_packet_type)
+                })?,
+            })
         })
     }
 
