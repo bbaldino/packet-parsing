@@ -32,3 +32,21 @@ I'm running into this again and really wanting to be able to write functional-st
 be chained together and wishing I had access to the field name in a PacketParseResult.  I'm thinking
 now about writing a custom Result-style type that will also keep the field name.
 
+Things I want to be able to do:
+
+let version = try_parse_field("version", || buf.read_bits_as_u8(2))?;
+let version = try_parse_field("version", || buf.read_bits_as_u8(2)?.validate(validate_version))?;
+let header = Rtcpheader {
+    version: try_parse_field("version", || buf.read_bits_as_u8(2)?.validate(validate_version))?,
+    has_padding: try_parse_field("has_padding", || buf.read_bool()?,
+    ...
+};
+
+Think I was able to achieve the above behavior.  A couple notes:
+- This actually ended up requiring that 'Validatable' be implemented on a plain T, not some form
+  of Result<T, E>.  I think this is probably better, as it keeps Validatable simpler, and also
+  means that we don't bother calling validate if the previous operation failed (since the '?'
+  on the previous call will either grab the actual value or return with the error
+- Right now I'm requiring the validated value implements Copy: need to find a good way to
+  support both simply-copyable values (u8, u16, etc.) as well as passing more expensive types
+  by references (e.g. a slice of bytes)
