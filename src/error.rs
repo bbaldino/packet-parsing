@@ -14,9 +14,20 @@ pub enum PacketParseError {
 pub struct ValidationError(pub String);
 
 pub type PacketParseResult<T> = Result<T, PacketParseError>;
-pub type ValidationResult<T> = Result<T, ValidationError>;
+pub type ValidationResult = Result<(), ValidationError>;
 
 pub fn wrap<T: std::error::Error + 'static>(
+    field_name: &str,
+    err: T,
+) -> Box<dyn std::error::Error> {
+    PacketParseError::FieldParseError {
+        field_name: field_name.to_owned(),
+        error: err.into(),
+    }
+    .into()
+}
+
+pub fn wrap2<T: Into<Box<dyn std::error::Error>>>(
     field_name: &str,
     err: T,
 ) -> Box<dyn std::error::Error> {

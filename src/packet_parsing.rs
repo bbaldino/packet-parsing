@@ -1,5 +1,6 @@
-use crate::error::{wrap, ValidationError, ValidationResult};
+use crate::error::{wrap, wrap2, ValidationError, ValidationResult};
 
+// This has issues because it often can't infer U and requires it to be specified
 fn try_parse_field<T, U, F: FnOnce() -> Result<T, U>>(
     field_name: &str,
     block: F,
@@ -13,15 +14,45 @@ where
     }
 }
 
+// Trying to get rid of the need for 'U'
+// This works, but doesn't work in the case where we return a Result<T, SomeErrorType>
+fn try_parse_field2<T, F: FnOnce() -> Result<T, Box<dyn std::error::Error>>>(
+    field_name: &str,
+    block: F,
+) -> Result<T, Box<dyn std::error::Error>> {
+    match block() {
+        Ok(v) => Ok(v),
+        Err(e) => Err(wrap2(field_name, e)),
+    }
+}
+
+fn try_parse_field_3<T, U, F: FnOnce() -> Result<T, U>>(
+    field_name: &str,
+    block: F,
+) -> Result<T, Box<dyn std::error::Error>>
+where
+    U: Into<Box<dyn std::error::Error>>,
+{
+    match block() {
+        Ok(v) => Ok(v),
+        Err(e) => Err(e.into()),
+        //Err(e) => Err(wrap(field_name, e.into())),
+    }
+}
+
+//TODO: it would be cool to write a bunch of convenience functions like:
+//require_value(2) - for when we expect it to be a specific value
+//require_within_range(<range>) - for when we expect it to be within a specific range
+//etc... for whatever other validation we expect
 trait Validatable<T> {
-    fn validate<U: std::error::Error + 'static, F: FnOnce(&T) -> ValidationResult<T>>(
+    fn validate<F: FnOnce(&T) -> ValidationResult>(
         self,
         validator: F,
     ) -> Result<T, Box<dyn std::error::Error>>;
 }
 
 impl<T> Validatable<T> for T {
-    fn validate<U: std::error::Error + 'static, F: FnOnce(&T) -> ValidationResult<T>>(
+    fn validate<F: FnOnce(&T) -> ValidationResult>(
         self,
         validator: F,
     ) -> Result<T, Box<dyn std::error::Error>> {
@@ -210,10 +241,9 @@ mod tests {
     use crate::error::ValidationError;
     use bitbuffer::{bit_buffer::BitBuffer, readable_buf::ReadableBuf};
 
-    fn validate_field(value: u16) -> ValidationResult<u16> {
-        println!("validating value {}", value);
+    fn validate_field(value: &u16) -> ValidationResult {
         match value {
-            0..=5 => Ok(value),
+            0..=5 => Ok(()),
             v @ _ => Err(ValidationError(format!(
                 "Expected value between 0 and 5, got {}",
                 v
@@ -221,16 +251,16 @@ mod tests {
         }
     }
 
-    fn validate_version(value: u8) -> ValidationResult<u8> {
+    fn validate_version(value: &u8) -> ValidationResult {
         match value {
-            2 => Ok(value),
+            2 => Ok(()),
             v @ _ => Err(ValidationError(format!("Expected version=2, got {}", v))),
         }
     }
 
-    fn validate_packet_type(value: u8) -> ValidationResult<u8> {
+    fn validate_packet_type(value: &u8) -> ValidationResult {
         match value {
-            90..=120 => Ok(value),
+            90..=120 => Ok(()),
             v @ _ => Err(ValidationError(format!(
                 "Expected packet type between 90 and 120, got {}",
                 v
@@ -246,22 +276,18 @@ mod tests {
     }
 
     fn parse_header(buf: &mut dyn ReadableBuf) -> Result<Header, Box<dyn std::error::Error>> {
-        let x: Result<u8, Box<dyn std::error::Error + 'static>> =
-            try_parse_field("version", || buf.read_bits_as_u8(2));
-        try_parse_field("header", || {
+        try_parse_field2("header", || {
             Ok(Header {
-                //version: try_parse_field("version", || {
-                //    buf.read_bits_as_u8(2)?.validate(validate_version)
-                //})?,
-                version: x?,
-                //has_padding: try_parse_field("has_padding", || buf.read_bit_as_bool())?,
-                has_padding: true,
-                //report_count: try_parse_field("report count", || buf.read_bits_as_u8(5))?,
-                report_count: 10,
-                //packet_type: try_parse_field("packet type", || {
-                //    buf.read_u8()?.validate(validate_packet_type)
-                //})?,
-                packet_type: 10,
+                version: try_parse_field2("version", || {
+                    buf.read_bits_as_u8(2)?.validate(validate_version)
+                })?,
+                has_padding: try_parse_field2("has_padding", || {
+                    buf.read_bit_as_bool().map_err(Into::into)
+                })?,
+                report_count: try_parse_field("report count", || buf.read_bits_as_u8(5))?,
+                packet_type: try_parse_field2("packet type", || {
+                    buf.read_u8()?.validate(validate_packet_type)
+                })?,
             })
         })
     }

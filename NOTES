@@ -50,3 +50,18 @@ Think I was able to achieve the above behavior.  A couple notes:
 - Right now I'm requiring the validated value implements Copy: need to find a good way to
   support both simply-copyable values (u8, u16, etc.) as well as passing more expensive types
   by references (e.g. a slice of bytes)
+
+Turns out I couldn't get exactly what I wanted (I'll need to use a workaround), but I have a better 
+understanding as to why (though it's still entirely possible I'm missing a trick to overcome this). 
+
+The problem is that I basically want to define a function that can return either a specific type which
+implements Error, or a Box<dyn Error>.  I can do this like so:
+
+fn foo<E>() -> E where E: Into<Box<dyn Error>> {
+   ...
+}
+'E' here can match on both 'MyErrorType' and 'Box<dyn Error>, so that works.  The problem arises when
+the explicit return of the function is of a specific return type.  It then infers the return type (E)
+to be that specific return type.  Then, if an earlier line in the function tries an early return from
+a function which returns a Result<T, Box<dyn Error>> via 'some_func_call()?;', it will complain because
+it can't convert the Box<dyn Error> type (whatever it is) into a 'MyErrorType'.
