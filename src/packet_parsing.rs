@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::error::{wrap, wrap2, RequireEqualError, ValidationError, ValidationResult};
+use crate::error::{PacketParseError, RequireEqualError, ValidationResult};
 
 pub fn try_parse_field<T, F: FnOnce() -> Result<T, Box<dyn std::error::Error>>>(
     field_name: &str,
@@ -8,7 +8,10 @@ pub fn try_parse_field<T, F: FnOnce() -> Result<T, Box<dyn std::error::Error>>>(
 ) -> Result<T, Box<dyn std::error::Error>> {
     match block() {
         Ok(v) => Ok(v),
-        Err(e) => Err(wrap2(field_name, e)),
+        Err(e) => Err(Box::new(PacketParseError {
+            field_name: field_name.to_owned(),
+            error: e.into(),
+        })),
     }
 }
 
@@ -65,6 +68,15 @@ mod tests {
     use crate::error::ValidationError;
     use bitbuffer::{bit_buffer::BitBuffer, readable_buf::ReadableBuf};
 
+    #[test]
+    fn test_try_parse_succeeds() {
+        let mut buf = BitBuffer::new(vec![0b1_0_000111, 0x42]);
+        assert_eq!(
+            try_parse_field("field", || buf.read_bit_as_bool()).unwrap(),
+            true
+        );
+    }
+
     fn validate_field(value: &u16) -> ValidationResult {
         match value {
             0..=5 => Ok(()),
@@ -120,19 +132,6 @@ mod tests {
     fn test() {
         let mut buf = BitBuffer::new(vec![0b10_0_00000, 0b11111111]);
 
-        //let x: Box<dyn std::error::Error> = buf.read_bit().map_err(Box::new).unwrap_err();
-        //let y: Result<Bit, Box<dyn std::error::Error>> = Err((Foo {}).into());
-        ////buf.read_bit().map_err(|e| Box::new(Foo {}.into()));
-        //let y: Result<Bit, Box<dyn std::error::Error>> = buf.read_bit().map_err(|e| e.into());
-
-        // This works: But we have to do the '?' and the wrap it with Ok() in order to Box
-        // the error type (otherwise it complains about having some specific error type and not
-        // a Box<dyn Error>.  And unfortunately even doing map_err(Box::new) doesn't work.
-        // could the signature on the block function in try_parse_field be changed in such a way
-        // that that function could do the boilerplate work?
-        //if let Err(e) = try_parse_field("my new field", || buf.read_u16()) {
-        //    println!("{}", e);
-        //}
         if let Err(e) = parse_header(&mut buf) {
             println!("{}", e);
         }
