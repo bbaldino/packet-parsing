@@ -13,6 +13,10 @@ pub enum PacketParseError {
 #[error("Validation error: {0}")]
 pub struct ValidationError(pub String);
 
+#[derive(Error, Debug)]
+#[error("{0}")]
+pub struct RequireEqualError(pub String);
+
 pub type PacketParseResult<T> = Result<T, PacketParseError>;
 pub type ValidationResult = Result<(), ValidationError>;
 
