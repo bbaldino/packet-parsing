@@ -19,53 +19,14 @@ pub fn try_parse_field<T, F: FnOnce() -> Result<T, Box<dyn std::error::Error>>>(
 //require_value(2) - for when we expect it to be a specific value
 //require_within_range(<range>) - for when we expect it to be within a specific range
 //etc... for whatever other validation we expect
-pub trait Validatable<T> {
-    fn validate<F: FnOnce(&T) -> ValidationResult>(
-        self,
-        validator: F,
-    ) -> Result<T, Box<dyn std::error::Error>>;
-}
-
-impl<T> Validatable<T> for T
-where
-    T: Eq,
-{
-    fn validate<F: FnOnce(&T) -> ValidationResult>(
-        self,
-        validator: F,
-    ) -> Result<T, Box<dyn std::error::Error>> {
-        match validator(&self) {
-            Ok(_) => Ok(self),
-            Err(e) => Err(e.into()),
-        }
-    }
-}
-
-pub trait RequireEqual<T> {
-    fn require_value(self, expected: T) -> Result<T, Box<dyn std::error::Error>>;
-}
-
-impl<T> RequireEqual<T> for T
-where
-    T: Eq + Display,
-{
-    fn require_value(self, expected: T) -> Result<T, Box<dyn std::error::Error>> {
-        if self == expected {
-            Ok(self)
-        } else {
-            Err(RequireEqualError(format!(
-                "A value of {} was required, got value {}",
-                expected, self
-            ))
-            .into())
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::ValidationError;
+    use crate::{
+        error::ValidationError,
+        validators::{RequireEqual, Validatable},
+    };
     use bitbuffer::{bit_buffer::BitBuffer, readable_buf::ReadableBuf};
 
     #[test]
