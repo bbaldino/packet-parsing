@@ -16,31 +16,40 @@ pub fn try_parse_field<T, F: FnOnce() -> Result<T, Box<dyn std::error::Error>>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitbuffer::{bit_buffer::BitBuffer, readable_buf::ReadableBuf};
+    use thiserror::Error;
+
+    #[derive(Error, Debug)]
+    #[error("Error: {0}")]
+    struct MyError(String);
+
+    fn parse_field_success() -> Result<u8, Box<dyn std::error::Error>> {
+        Ok(42)
+    }
+
+    fn parse_field_error() -> Result<u8, Box<dyn std::error::Error>> {
+        Err(Box::new(MyError("Error".to_owned())))
+    }
 
     #[test]
     fn test_try_parse_succeeds() {
-        let mut buf = BitBuffer::new(vec![0b1_0_000111, 0x42]);
         assert_eq!(
-            try_parse_field("field", || buf.read_bit_as_bool()).unwrap(),
-            true
+            try_parse_field("field", || parse_field_success()).unwrap(),
+            42
         );
     }
 
     #[test]
     fn test_try_parse_fails() {
-        let mut buf = BitBuffer::new(Vec::new());
-        let result = try_parse_field("field", || buf.read_bit_as_bool());
+        let result = try_parse_field("field", || parse_field_error());
         assert!(result.is_err());
     }
 
     #[test]
     fn test_try_parse_multiple_calls() {
-        let mut buf = BitBuffer::new(vec![0b1_0_000111, 0x42]);
         let result = try_parse_field("field", || {
-            buf.read_bit_as_bool()?;
-            buf.read_bit()?;
-            buf.read_bits_as_u8(6)
+            parse_field_success()?;
+            parse_field_success()?;
+            parse_field_success()
         });
         assert!(result.is_ok());
     }
