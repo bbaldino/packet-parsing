@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt::{Debug, Display};
-use std::ops::{Range, RangeBounds};
+use std::ops::RangeBounds;
 
 use crate::error::{RequireEqualError, ValidationError, ValidationResult};
 
